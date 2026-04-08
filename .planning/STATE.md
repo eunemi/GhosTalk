@@ -12,3 +12,4 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260408-vw7 | Settings modal with ghost regenerate, themes, session clear | 2026-04-08 | 7bcb08d | [260408-vw7](./quick/260408-vw7-settings-modal-with-ghost-regenerate-the/) |
+| 260408-x1f | Custom name input + emoji avatar picker, remove themes | 2026-04-08 | df2d574 | [260408-x1f](./quick/260408-x1f-custom-name-input-emoji-avatar-picker-re/) |
