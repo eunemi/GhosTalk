@@ -24,7 +24,8 @@ export function GhostAuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
-  const supabase = createClient()
+  // Stable client — created exactly once to prevent infinite re-render loop
+  const [supabase] = useState(() => createClient())
 
   useEffect(() => {
     let mounted = true
