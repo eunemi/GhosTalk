@@ -59,6 +59,10 @@ export default function Home() {
   const [nameError, setNameError] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<string>('')
+  const [createdRoomLink, setCreatedRoomLink] = useState<string>('')
+  const [showRoomCreated, setShowRoomCreated] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [myRooms, setMyRooms] = useState<string[]>([])
   const [supabase] = useState(() => createClient())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -71,6 +75,21 @@ export default function Home() {
     const saved = localStorage.getItem('ghost-avatar')
     if (saved) setSelectedAvatar(saved)
   }, [])
+
+  // Auto-join room from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const roomFromUrl = params.get('room')
+    if (roomFromUrl) {
+      setCurrentRoom(roomFromUrl)
+    }
+  }, [])
+
+  // Load my created rooms from localStorage
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem('ghost-my-rooms') || '[]')
+    setMyRooms(saved)
+  }, [showRoomCreated])
 
   // Ghost name regeneration
   const regenerateGhostName = async () => {
@@ -119,6 +138,63 @@ export default function Home() {
     supabase.auth.updateUser({ data: { ghost_avatar: emoji } }).catch(console.error)
   }
 
+  // Create private room
+  const createPrivateRoom = () => {
+    const adjectives = ['shadow', 'silent', 'phantom', 'hollow', 'cursed',
+      'neon', 'frozen', 'blazing', 'velvet', 'rogue']
+    const nouns = ['sector', 'vault', 'nexus', 'node', 'cipher',
+      'relay', 'breach', 'signal', 'domain', 'proxy']
+
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
+    const noun = nouns[Math.floor(Math.random() * nouns.length)]
+    const code = Math.random().toString(36).substring(2, 6).toUpperCase()
+
+    const roomId = `${adj}-${noun}-${code}`
+    const baseUrl = window.location.origin
+    const link = `${baseUrl}?room=${roomId}`
+
+    // Save to recent rooms
+    const saved = JSON.parse(localStorage.getItem('ghost-my-rooms') || '[]') as string[]
+    const updated = [roomId, ...saved.filter((r: string) => r !== roomId)].slice(0, 5)
+    localStorage.setItem('ghost-my-rooms', JSON.stringify(updated))
+
+    setCreatedRoomLink(link)
+    setShowRoomCreated(true)
+  }
+
+  // Copy room link
+  const copyRoomLink = async () => {
+    try {
+      await navigator.clipboard.writeText(createdRoomLink)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = createdRoomLink
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    }
+  }
+
+  // Join the created room
+  const joinCreatedRoom = () => {
+    try {
+      const url = new URL(createdRoomLink)
+      const roomId = url.searchParams.get('room')
+      if (roomId) {
+        setCurrentRoom(roomId)
+        setShowRoomCreated(false)
+        window.history.pushState({}, '', `?room=${roomId}`)
+      }
+    } catch (err) {
+      console.error('Join room failed:', err)
+    }
+  }
+
   // Session clear
   const clearSession = async () => {
     const confirmed = window.confirm(
@@ -137,7 +213,9 @@ export default function Home() {
   }
 
   const myGhost = ghostName ?? 'Happy-Dolphin'
-  const activeRoom = ROOMS.find((room) => room.id === currentRoom) ?? ROOMS[0]
+  const predefinedRoom = ROOMS.find((room) => room.id === currentRoom)
+  const activeRoomName = predefinedRoom ? predefinedRoom.name : currentRoom.split('-').slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  const activeRoom = predefinedRoom ?? { id: currentRoom, name: activeRoomName, icon: 'lock' }
   const charsRemaining = MAX_MESSAGE_LENGTH - content.length
 
   const onlineCount = useMemo(() => {
@@ -224,6 +302,7 @@ export default function Home() {
 
           <button
             type="button"
+            onClick={createPrivateRoom}
             className="group relative mx-6 mt-6 overflow-hidden rounded-xl border border-secondary/10 bg-secondary-container/40 p-6 text-left transition-all hover:bg-secondary-container/60"
           >
             <div className="relative z-10">
@@ -238,6 +317,37 @@ export default function Home() {
               <span className="material-symbols-outlined text-6xl">spa</span>
             </div>
           </button>
+
+          {/* My Sanctuaries */}
+          {myRooms.length > 0 && (
+            <div className="mx-6 mt-4">
+              <div className="mb-2 font-label text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                My Sanctuaries
+              </div>
+              <div className="space-y-1">
+                {myRooms.map((roomId) => (
+                  <button
+                    key={roomId}
+                    type="button"
+                    onClick={() => {
+                      setCurrentRoom(roomId)
+                      window.history.pushState({}, '', `?room=${roomId}`)
+                    }}
+                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-all ${
+                      currentRoom === roomId
+                        ? 'bg-primary-container/30 text-primary'
+                        : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-700'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">lock</span>
+                    <span className="font-label text-[10px] font-semibold uppercase tracking-wider truncate">
+                      {roomId.split('-').slice(0, 2).join('-')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-auto px-6">
             <div className="flex items-center gap-3 rounded-full border border-outline-variant/10 bg-surface-container-lowest p-3 shadow-sm">
@@ -710,6 +820,113 @@ export default function Home() {
             <div className="border-t border-slate-100 px-6 py-3">
               <div className="font-label text-[8px] font-bold uppercase tracking-widest text-slate-300 text-center">
                 GHOSTALK v1.0 — All sessions are ephemeral
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Room Created Modal */}
+      {showRoomCreated && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="relative w-full max-w-sm overflow-y-auto max-h-[90vh] rounded-2xl border border-slate-200 bg-white shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">lock</span>
+                <span className="font-headline text-sm font-bold tracking-tight text-slate-700 uppercase">
+                  Room Created
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRoomCreated(false)}
+                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+
+              {/* Success indicator */}
+              <div className="flex flex-col items-center gap-3 py-2">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-container/30 text-3xl">
+                  👻
+                </div>
+                <div className="text-center">
+                  <div className="font-headline text-sm font-bold text-primary uppercase tracking-wide">
+                    Sanctuary Created!
+                  </div>
+                  <div className="font-label text-[9px] text-slate-400 mt-1">
+                    Only those with the link can join
+                  </div>
+                </div>
+              </div>
+
+              {/* Room ID display */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                <div className="font-label text-[8px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  Room ID
+                </div>
+                <div className="font-mono text-xs text-primary tracking-wider break-all">
+                  {createdRoomLink.split('room=')[1] || ''}
+                </div>
+              </div>
+
+              {/* Shareable Link */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                <div className="font-label text-[8px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                  Shareable Link
+                </div>
+                <div className="font-mono text-[9px] text-slate-500 break-all leading-relaxed">
+                  {createdRoomLink}
+                </div>
+              </div>
+
+              {/* Copy Link Button */}
+              <button
+                type="button"
+                onClick={copyRoomLink}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${
+                  linkCopied
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                    : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {linkCopied ? 'check_circle' : 'content_copy'}
+                </span>
+                {linkCopied ? 'Link Copied!' : 'Copy Link'}
+              </button>
+
+              {/* Join Room Button */}
+              <button
+                type="button"
+                onClick={joinCreatedRoom}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-sky-300 bg-sky-50 hover:bg-sky-100 hover:border-sky-400 font-label text-xs font-bold tracking-widest uppercase text-sky-700 transition-all"
+              >
+                <span className="material-symbols-outlined text-sm">login</span>
+                Enter Room Now
+              </button>
+
+              {/* Warning */}
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <span className="material-symbols-outlined text-amber-500 text-sm mt-0.5">warning</span>
+                <div className="font-label text-[8px] text-amber-600 uppercase leading-relaxed">
+                  Save this link — messages auto-delete after 4 hours.
+                  The room is always accessible via this link.
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-100 px-6 py-3">
+              <div className="font-label text-[8px] font-bold uppercase tracking-widest text-slate-300 text-center">
+                GHOSTALK — Private rooms are ephemeral
               </div>
             </div>
 
