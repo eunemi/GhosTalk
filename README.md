@@ -79,8 +79,8 @@ No accounts. No history. No trace. Messages self-destruct in 4 hours.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/ghostalk.git
-cd ghostalk
+git clone https://github.com/th-arya/GhosTalk.git
+cd GhosTalk
 ```
 
 ### 2. Install dependencies
@@ -226,7 +226,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 <div align="center">
 
-**Built with 👻 by [Arya Yadav](https://github.com/your-username)**
+**Built with 👻 by [Arya Yadav](https://github.com/th-arya)**
 
 *Ghost Protocol — Where conversations vanish, but connections remain.*
 
