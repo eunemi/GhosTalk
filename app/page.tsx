@@ -1,414 +1,648 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { format } from 'date-fns'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
 import { useGhostAuth } from '@/lib/useGhostAuth'
 import { useRoom } from '@/lib/useRoom'
-import { format } from 'date-fns'
+import { createClient } from '@/lib/supabaseClient'
 
-const PREDEFINED_ROOMS = [
-  { id: 'shadow_reserve', name: 'SHADOW_RESERVE' },
-  { id: 'global_tether', name: 'GLOBAL_TETHER' },
-  { id: 'dark_sector', name: 'DARK_SECTOR' },
+type Room = {
+  id: string
+  name: string
+  icon: string
+}
+
+const ROOMS: Room[] = [
+  { id: 'shadow_reserve', name: 'General', icon: 'forum' },
+  { id: 'global_tether', name: 'Friends', icon: 'group' },
+  { id: 'dark_sector', name: 'Study', icon: 'menu_book' },
+  { id: 'cozy_corner', name: 'Chill', icon: 'self_improvement' },
 ]
 
+const THEMES = {
+  void: {
+    label: 'VOID',
+    desc: 'Deep black — default',
+    emoji: '🌑',
+    bg: '#050508',
+    accent: '#8b5cf6',
+  },
+  crimson: {
+    label: 'CRIMSON',
+    desc: 'Blood red operator',
+    emoji: '🔴',
+    bg: '#080308',
+    accent: '#f43f5e',
+  },
+  matrix: {
+    label: 'MATRIX',
+    desc: 'Green terminal mode',
+    emoji: '💚',
+    bg: '#020a02',
+    accent: '#22c55e',
+  },
+} as const
+
+type ThemeKey = keyof typeof THEMES
+
+const MOOD_TAGS = [
+  { label: 'Gratitude', className: 'bg-primary-container/20 text-primary border-primary/10' },
+  { label: 'Peaceful', className: 'bg-secondary-container/30 text-secondary border-secondary/10' },
+  { label: 'Curious', className: 'bg-tertiary-container/20 text-tertiary border-tertiary/10' },
+  { label: 'Sleepy', className: 'bg-surface-container-high text-on-surface-variant border-outline-variant/10' },
+]
+
+function initialsFromName(name: string): string {
+  return name
+    .split('-')
+    .map((chunk) => chunk[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
+
+function avatarTone(name: string): string {
+  const tones = [
+    'bg-sky-200/70 text-sky-800',
+    'bg-emerald-200/70 text-emerald-800',
+    'bg-amber-200/70 text-amber-800',
+    'bg-pink-200/70 text-pink-800',
+  ]
+  let hash = 0
+  for (let index = 0; index < name.length; index += 1) {
+    hash += name.charCodeAt(index)
+  }
+  return tones[Math.abs(hash) % tones.length]
+}
+
 export default function Home() {
-  const { ghostName } = useGhostAuth()
-  const [currentRoom, setCurrentRoom] = useState('shadow_reserve')
-  const { messages, connected, sendMessage, error, loading } = useRoom(currentRoom)
-  
+  const { ghostName, loading: authLoading } = useGhostAuth()
+  const [currentRoom, setCurrentRoom] = useState(ROOMS[0].id)
+  const { messages, connected, sendMessage, error, loading, MAX_MESSAGE_LENGTH } = useRoom(currentRoom)
+
   const [content, setContent] = useState('')
-  const [modalState, setModalState] = useState<'soon' | 'channels' | null>(null)
-  
+  const [showSettings, setShowSettings] = useState(false)
+  const [currentTheme, setCurrentTheme] = useState<ThemeKey>('void')
+  const [supabase] = useState(() => createClient())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
+  // Theme application
+  const applyTheme = useCallback((theme: ThemeKey) => {
+    const t = THEMES[theme]
+    document.documentElement.style.setProperty('--accent-primary', t.accent)
+    document.documentElement.style.setProperty('--bg-void', t.bg)
+    setCurrentTheme(theme)
+    localStorage.setItem('ghost-theme', theme)
+  }, [])
+
+  // Restore saved theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('ghost-theme') as ThemeKey | null
+    if (saved && THEMES[saved]) applyTheme(saved)
+  }, [applyTheme])
+
+  // Ghost name regeneration
+  const regenerateGhostName = async () => {
+    const ADJECTIVES = ['Phantom', 'Silent', 'Vigilant', 'Cursed', 'Neon',
+      'Hollow', 'Drifting', 'Velvet', 'Rogue', 'Spectral', 'Blazing', 'Frozen']
+    const ANIMALS = ['Firefly', 'Armadillo', 'Pangolin', 'Axolotl',
+      'Mantis', 'Wombat', 'Capybara', 'Narwhal', 'Manta', 'Viper', 'Cobra', 'Falcon']
+
+    const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]
+    const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)]
+    const newName = `${adj}-${animal}`.toUpperCase()
+
+    try {
+      await supabase.auth.updateUser({ data: { ghost_name: newName } })
+      window.location.reload()
+    } catch (err) {
+      console.error('Name regeneration failed:', err)
+    }
+  }
+
+  // Session clear
+  const clearSession = async () => {
+    const confirmed = window.confirm(
+      'GHOST PROTOCOL: Permanently delete your session? This action cannot be undone.'
+    )
+    if (!confirmed) return
+
+    try {
+      await supabase.auth.signOut()
+      localStorage.clear()
+      sessionStorage.clear()
+      window.location.reload()
+    } catch (err) {
+      console.error('Session clear failed:', err)
+    }
+  }
+
+  const myGhost = ghostName ?? 'Happy-Dolphin'
+  const activeRoom = ROOMS.find((room) => room.id === currentRoom) ?? ROOMS[0]
+  const charsRemaining = MAX_MESSAGE_LENGTH - content.length
+
+  const onlineCount = useMemo(() => {
+    const participants = new Set(messages.map((message) => message.sender_name))
+    if (ghostName) participants.add(ghostName)
+    return Math.max(1, participants.size)
+  }, [messages, ghostName])
+
+  const otherGhosts = useMemo(
+    () => Array.from(new Set(messages.map((message) => message.sender_name))).filter((name) => name !== ghostName).slice(0, 4),
+    [messages, ghostName]
+  )
+
+  const goalCount = Math.min(messages.length, 1000)
+  const progressPercent = Math.max(8, Math.round((goalCount / 1000) * 100))
+
+  async function submitMessage() {
     if (!content.trim() || !connected) return
     await sendMessage(content)
     setContent('')
   }
 
-  const myGhost = ghostName || 'ENCRYPTING...'
-  const roomNameDisplay = PREDEFINED_ROOMS.find(r => r.id === currentRoom)?.name || currentRoom.toUpperCase()
-
-  // Generate a fixed pseudo-random line length based on message content to preserve the design styling
-  const getLineLength = (text: string) => Math.min(Math.max((text.length / 150) * 100, 15), 85) + '%'
+  async function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await submitMessage()
+  }
 
   return (
     <>
-      <div className="noise-overlay" />
+      <div className="organic-blob bg-primary-container size-[38rem] -top-52 -left-48" />
+      <div className="organic-blob bg-tertiary-container size-[30rem] -bottom-24 -right-20" />
+      <div className="organic-blob bg-secondary-container size-[26rem] top-1/3 right-1/4" />
 
-      {/* Modals for Clickable Fallbacks */}
-      {modalState && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#050508]/80 backdrop-blur-md">
-          <div className="relative w-full max-w-sm border border-primary/30 bg-surface-container-lowest p-8 shadow-[0_0_40px_rgba(208,188,255,0.1)]">
-            <button 
-              onClick={() => setModalState(null)}
-              className="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-            
-            {modalState === 'soon' && (
-              <div className="text-center mt-4">
-                <div className="mb-4 flex justify-center">
-                  <span className="material-symbols-outlined text-5xl text-primary animate-pulse">lock</span>
-                </div>
-                <h2 className="font-headline text-lg tracking-widest text-primary uppercase mb-2">Access Denied</h2>
-                <p className="font-mono text-[10px] text-on-surface-variant mb-6 leading-relaxed uppercase">
-                  🚧 Feature under development.<br/>Check back next sync.
+      <header className="fixed inset-x-0 top-0 z-50 flex h-20 items-center justify-between bg-white/70 px-4 shadow-[0_20px_50px_rgba(0,101,144,0.05)] backdrop-blur-xl sm:px-8">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <span className="font-headline text-2xl font-bold tracking-tight text-sky-700">GhosTalk</span>
+          <span className="hidden border-l border-outline-variant/30 pl-4 font-label text-sm tracking-tight text-slate-500 md:inline">
+            Anonymous chat, zero identity required
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4 sm:gap-8">
+          <nav className="hidden items-center gap-8 font-label font-semibold text-slate-500 lg:flex">
+            <span className="border-b-2 border-sky-400 py-1 font-bold text-sky-700">Rooms</span>
+            <span className="rounded-full px-3 py-1 transition-all duration-300 hover:bg-sky-50/70">Discover</span>
+            <span className="rounded-full px-3 py-1 transition-all duration-300 hover:bg-sky-50/70">Guidelines</span>
+          </nav>
+
+          <button className="rounded-full bg-tertiary-container px-5 py-2 font-headline text-sm font-semibold text-on-tertiary-container transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+            Start Chatting
+          </button>
+        </div>
+      </header>
+
+      <div className="flex h-screen overflow-hidden pt-20">
+        <aside className="hidden w-80 flex-col gap-4 overflow-y-auto bg-white/40 py-8 backdrop-blur-md md:flex">
+          <div className="mb-4 px-8">
+            <h2 className="font-headline text-2xl font-bold text-secondary">Rooms</h2>
+            <p className="font-body text-sm text-slate-500">Find your vibe</p>
+          </div>
+
+          <nav className="flex flex-col gap-1">
+            {ROOMS.map((room) => {
+              const isActive = room.id === currentRoom
+              return (
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => setCurrentRoom(room.id)}
+                  className={`mx-4 flex items-center gap-4 px-8 py-3 text-left font-body text-lg font-medium transition-transform duration-200 ${
+                    isActive
+                      ? 'rounded-full bg-emerald-100/60 text-emerald-800'
+                      : 'text-slate-600 hover:translate-x-1'
+                  }`}
+                >
+                  <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>
+                    {room.icon}
+                  </span>
+                  <span>{room.name}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <button
+            type="button"
+            className="group relative mx-6 mt-6 overflow-hidden rounded-xl border border-secondary/10 bg-secondary-container/40 p-6 text-left transition-all hover:bg-secondary-container/60"
+          >
+            <div className="relative z-10">
+              <h4 className="font-headline font-bold text-secondary">New Sanctuary?</h4>
+              <p className="mt-1 text-xs text-on-secondary-container/80">Host your own private discussion space.</p>
+              <div className="mt-4 flex items-center text-sm font-bold text-secondary">
+                <span>Create Room</span>
+                <span className="material-symbols-outlined ml-2 text-sm">add_circle</span>
+              </div>
+            </div>
+            <div className="absolute -bottom-4 -right-4 opacity-10 transition-transform group-hover:scale-110">
+              <span className="material-symbols-outlined text-6xl">spa</span>
+            </div>
+          </button>
+
+          <div className="mt-auto px-6">
+            <div className="flex items-center gap-3 rounded-full border border-outline-variant/10 bg-surface-container-lowest p-3 shadow-sm">
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary-container/30 font-label text-sm font-bold text-on-primary-container">
+                {initialsFromName(myGhost)}
+              </div>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="truncate font-headline text-sm font-bold">{myGhost}</p>
+                <p className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
+                  {connected ? 'Online' : 'Reconnecting'}
                 </p>
-                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="text-slate-400 transition-colors hover:text-primary"
+                aria-label="Open Settings"
+              >
+                <span className="material-symbols-outlined">settings</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <main className="relative flex flex-1 flex-col bg-transparent pb-24 md:pb-0">
+          <div className="flex h-20 items-center justify-between px-4 sm:px-8">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <h1 className="font-headline text-xl font-bold text-on-surface">{activeRoom.name} Room</h1>
+                <span className="flex items-center gap-1 rounded-full bg-secondary-container px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-on-secondary-container">
+                  <span className={`size-1.5 rounded-full ${connected ? 'bg-secondary' : 'bg-amber-500'}`} />
+                  {onlineCount} online
+                </span>
+              </div>
+              <p className="mt-0.5 flex items-center gap-1 font-label text-xs text-slate-500">
+                <span className="material-symbols-outlined text-sm text-tertiary">colors_spark</span>
+                Spread good vibes
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-4">
+              <button type="button" className="rounded-full p-2 transition-colors hover:bg-surface-container-high">
+                <span className="material-symbols-outlined text-slate-500">search</span>
+              </button>
+              <button type="button" className="rounded-full p-2 transition-colors hover:bg-surface-container-high">
+                <span className="material-symbols-outlined text-slate-500">more_vert</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="custom-scrollbar flex gap-2 overflow-x-auto px-4 pb-3 md:hidden">
+            {ROOMS.map((room) => {
+              const isActive = room.id === currentRoom
+              return (
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => setCurrentRoom(room.id)}
+                  className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-label text-xs font-semibold transition-colors ${
+                    isActive
+                      ? 'border-primary/20 bg-primary-container/50 text-primary'
+                      : 'border-outline-variant/20 bg-white/50 text-slate-600'
+                  }`}
+                >
+                  {room.name}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="custom-scrollbar flex-1 space-y-8 overflow-y-auto px-4 py-6 sm:px-8">
+            <div className="flex flex-col items-center gap-3 py-4 opacity-65">
+              <div className="h-px w-24 bg-gradient-to-r from-transparent via-outline-variant to-transparent" />
+              <div className="flex gap-4 font-label text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <span>Welcome</span>
+                <span>•</span>
+                <span>You are safe here</span>
+                <span>•</span>
+                <span>Share freely</span>
+              </div>
+              <div className="h-px w-24 bg-gradient-to-r from-transparent via-outline-variant to-transparent" />
+            </div>
+
+            {error && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center font-label text-xs font-semibold text-amber-700">
+                {error}
               </div>
             )}
 
-            {modalState === 'channels' && (
+            {(loading || authLoading) && messages.length === 0 && (
+              <div className="flex items-center justify-center gap-2 py-12 font-label text-xs uppercase tracking-widest text-slate-400">
+                <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                Loading messages...
+              </div>
+            )}
+
+            {messages.map((message) => {
+              const isMe = message.sender_name === ghostName
+              const sentAt = message.created_at ? format(new Date(message.created_at), 'h:mm a') : 'just now'
+
+              if (isMe) {
+                return (
+                  <div key={message.id} className="ml-auto flex max-w-2xl items-end justify-end gap-3">
+                    <div className="flex items-end gap-1">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="font-label text-[10px] font-bold text-primary">You</span>
+                        <div className="rounded-2xl rounded-br-sm bg-primary-container px-4 py-3 font-body text-on-primary-container shadow-[0_10px_30px_rgba(0,101,144,0.1)]">
+                          {message.content}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="mb-1 hidden text-[10px] text-slate-400 sm:block">{sentAt}</span>
+                  </div>
+                )
+              }
+
+              return (
+                <div key={message.id} className="flex max-w-2xl items-end gap-3">
+                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-full font-label text-xs font-bold ${avatarTone(message.sender_name)}`}>
+                    {initialsFromName(message.sender_name)}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="ml-4 font-label text-[10px] font-bold text-slate-400">{message.sender_name}</span>
+                    <div className="rounded-2xl rounded-bl-sm bg-surface-container-lowest px-4 py-3 font-body text-on-surface shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+                      {message.content}
+                    </div>
+                  </div>
+                  <span className="mb-1 hidden text-[10px] text-slate-400 sm:block">{sentAt}</span>
+                </div>
+              )
+            })}
+
+            {!loading && messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 opacity-40">
+                <span className="material-symbols-outlined mb-2 text-4xl text-primary">chat_bubble</span>
+                <p className="font-body text-sm italic">No messages yet... be the first ghost to speak.</p>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} className="h-4 w-full" />
+          </div>
+
+          <div className="px-4 pb-8 pt-2 sm:px-8 md:pb-8">
+            <div className="mx-auto max-w-4xl">
+              <form
+                onSubmit={handleFormSubmit}
+                className="group flex items-center gap-2 rounded-2xl bg-surface-container-low p-2 shadow-[0_10px_40px_rgba(0,0,0,0.04)] transition-all focus-within:ring-2 focus-within:ring-primary/30"
+              >
+                <button type="button" className="p-3 text-slate-400 transition-colors hover:text-tertiary">
+                  <span className="material-symbols-outlined">sentiment_satisfied</span>
+                </button>
+                <input
+                  type="text"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                  disabled={!connected}
+                  placeholder={connected ? 'Say something nice...' : 'Reconnecting...'}
+                  className="flex-1 border-none bg-transparent px-2 py-3 font-body text-on-surface placeholder:text-slate-400 focus:ring-0"
+                  autoComplete="off"
+                />
+                <button type="button" className="p-3 text-slate-400 transition-colors hover:text-primary">
+                  <span className="material-symbols-outlined">add_circle</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={!content.trim() || !connected}
+                  className="flex size-12 items-center justify-center rounded-xl bg-tertiary text-on-tertiary shadow-lg transition-all hover:scale-105 hover:shadow-tertiary/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    send
+                  </span>
+                </button>
+              </form>
+              <p className="mt-3 text-center font-label text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Keep it anonymous. Messages vanish in 4 hours.
+              </p>
+              {content.length > 0 && (
+                <p className="mt-2 text-center font-label text-[10px] font-semibold text-slate-400">
+                  {charsRemaining} characters remaining
+                </p>
+              )}
+            </div>
+          </div>
+        </main>
+
+        <aside className="hidden w-72 flex-col border-l border-transparent bg-surface-container/30 p-8 backdrop-blur-sm xl:flex">
+          <h3 className="mb-6 font-headline text-sm font-bold uppercase tracking-widest text-slate-400">Today&apos;s Echo</h3>
+          <div className="relative mb-8 overflow-hidden rounded-xl border border-white bg-white/60 p-6 shadow-sm">
+            <span className="material-symbols-outlined absolute -right-2 -top-2 text-6xl text-tertiary-container opacity-30">
+              format_quote
+            </span>
+            <p className="relative z-10 font-body text-sm italic leading-relaxed text-on-surface">
+              &quot;Stay kind, stay anonymous, and let this room feel safe for everyone.&quot;
+            </p>
+            <p className="mt-4 text-[10px] font-bold text-tertiary">- Anonymous Friend</p>
+          </div>
+
+          <h3 className="mb-6 font-headline text-sm font-bold uppercase tracking-widest text-slate-400">Online Moods</h3>
+          <div className="flex flex-wrap gap-2">
+            {MOOD_TAGS.map((tag) => (
+              <span key={tag.label} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${tag.className}`}>
+                {tag.label}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-8">
+            <h3 className="mb-4 font-headline text-sm font-bold uppercase tracking-widest text-slate-400">Active Shadows</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className={`size-2 rounded-full ${connected ? 'bg-secondary animate-pulse' : 'bg-amber-500'}`} />
+                <span className="truncate font-label text-xs font-semibold text-on-surface">{myGhost}</span>
+              </div>
+              {otherGhosts.length > 0 ? (
+                otherGhosts.map((name) => (
+                  <div key={name} className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-primary/60" />
+                    <span className="truncate font-label text-xs text-slate-500">{name}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="font-body text-xs text-slate-400">No one else is active yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-auto pt-8">
+            <div className="rounded-xl bg-gradient-to-br from-primary to-sky-700 p-4 text-white">
+              <p className="text-xs font-bold uppercase tracking-tight opacity-80">Current Goal</p>
+              <p className="mt-1 font-headline text-lg font-bold leading-tight">1,000 Ghost Messages Today</p>
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full rounded-full bg-white" style={{ width: `${progressPercent}%` }} />
+              </div>
+              <p className="mt-2 text-right text-[10px] font-bold">
+                {goalCount.toLocaleString()}/1,000
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-24 items-center justify-around rounded-t-2xl bg-white/80 px-6 pb-4 shadow-[0_-10px_40px_rgba(0,0,0,0.04)] backdrop-blur-2xl md:hidden">
+        <button type="button" className="flex scale-110 flex-col items-center justify-center rounded-[2rem] bg-sky-100 px-6 py-2 text-sky-800 transition-transform">
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+            grid_view
+          </span>
+          <span className="font-label text-[10px] uppercase tracking-widest">Rooms</span>
+        </button>
+        <button type="button" className="flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 text-slate-400 transition-all hover:bg-slate-100">
+          <span className="material-symbols-outlined">chat_bubble</span>
+          <span className="font-label text-[10px] uppercase tracking-widest">Chat</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          className="flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 text-slate-400 transition-all hover:bg-slate-100"
+        >
+          <span className="material-symbols-outlined">settings</span>
+          <span className="font-label text-[10px] uppercase tracking-widest">Settings</span>
+        </button>
+      </nav>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="relative mx-4 w-full max-w-sm overflow-y-auto max-h-[90vh] rounded-2xl border border-slate-200 bg-white shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">settings</span>
+                <span className="font-headline text-sm font-bold tracking-tight text-slate-700 uppercase">
+                  Ghost Settings
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+
+              {/* Current Identity */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                <div className="font-label text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                  Current Identity
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-container/30 text-lg">
+                    👻
+                  </div>
+                  <div>
+                    <div className="font-headline text-sm font-bold text-primary">{myGhost}</div>
+                    <div className="font-label text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                      Anonymous Session Active
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature 1 — Ghost Name Regenerate */}
               <div>
-                <h2 className="font-headline text-sm tracking-widest text-secondary uppercase mb-6 drop-shadow-[0_0_5px_rgba(76,215,246,0.5)]">Select Uplink Channel</h2>
-                <div className="space-y-3">
-                  {PREDEFINED_ROOMS.map(r => (
-                    <button 
-                      key={r.id}
-                      onClick={() => {
-                        setCurrentRoom(r.id)
-                        setModalState(null)
-                      }}
-                      className={`w-full flex items-center justify-between p-4 border transition-all ${currentRoom === r.id ? 'border-secondary bg-secondary/10 text-secondary shadow-[0_0_15px_rgba(76,215,246,0.2)]' : 'border-outline-variant/20 text-on-surface-variant hover:border-primary/50 hover:bg-primary/5 hover:text-primary'}`}
+                <div className="font-label text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                  Ghost Identity
+                </div>
+                <button
+                  type="button"
+                  onClick={regenerateGhostName}
+                  className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-sm">shuffle</span>
+                    <div className="text-left">
+                      <div className="font-headline text-xs font-bold text-slate-700 uppercase">Regenerate Identity</div>
+                      <div className="font-label text-[9px] text-slate-400">
+                        Get a new random ghost name
+                      </div>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-sm text-slate-400 group-hover:text-primary transition-colors">
+                    arrow_forward
+                  </span>
+                </button>
+              </div>
+
+              {/* Feature 2 — Theme Toggle */}
+              <div>
+                <div className="font-label text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                  Theme
+                </div>
+                <div className="space-y-2">
+                  {(Object.entries(THEMES) as [ThemeKey, typeof THEMES[ThemeKey]][]).map(([key, theme]) => (
+                    <button
+                      type="button"
+                      key={key}
+                      onClick={() => applyTheme(key)}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                        currentTheme === key
+                          ? 'border-primary/40 bg-primary-container/20'
+                          : 'border-slate-100 hover:border-primary/20 hover:bg-slate-50'
+                      }`}
                     >
-                      <span className="font-mono text-[10px] tracking-wider uppercase">{r.name}</span>
-                      {currentRoom === r.id && <span className="material-symbols-outlined text-sm animate-pulse">wifi_tethering</span>}
+                      <div className="flex items-center gap-3">
+                        <span className="text-base">{theme.emoji}</span>
+                        <div className="text-left">
+                          <div className="font-headline text-[10px] font-bold text-slate-700 uppercase">{theme.label}</div>
+                          <div className="font-label text-[8px] text-slate-400">{theme.desc}</div>
+                        </div>
+                      </div>
+                      {currentTheme === key && (
+                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
+
+              {/* Feature 3 — Account Clear */}
+              <div>
+                <div className="font-label text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+                  Danger Zone
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSession}
+                  className="w-full flex items-center justify-between p-4 rounded-xl border border-red-200 hover:border-red-400 hover:bg-red-50 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-red-500 text-sm">delete_forever</span>
+                    <div className="text-left">
+                      <div className="font-headline text-xs font-bold text-red-500 uppercase">Clear Session</div>
+                      <div className="font-label text-[9px] text-slate-400">
+                        Permanently delete your identity
+                      </div>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-sm text-red-300 group-hover:text-red-500 transition-colors">
+                    arrow_forward
+                  </span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-100 px-6 py-3">
+              <div className="font-label text-[8px] font-bold uppercase tracking-widest text-slate-300 text-center">
+                GHOST_PROTOCOL v1.0 — All sessions are ephemeral
+              </div>
+            </div>
+
           </div>
         </div>
       )}
-
-      {/* Main Layout */}
-      <div className="relative flex h-screen flex-col md:flex-row">
-        
-        {/* Left Sidebar */}
-        <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-white/5 bg-[#0e0e12] py-8 md:flex">
-          <div className="mb-12 px-6">
-            <div className="font-headline text-xl font-black tracking-widest text-violet-500">
-              {'//GHOST_PROTOCOL'}
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-2">
-            <div className="mb-4 px-6 font-headline text-[10px] uppercase tracking-[0.2em] text-[#cbc3d7]/30">
-              Main Access
-            </div>
-
-            <nav className="space-y-1">
-              <button
-                onClick={() => setModalState('channels')}
-                className="w-full flex items-center gap-4 border-l-2 border-cyan-400 bg-white/5 py-3 pl-4 font-label text-sm uppercase text-cyan-400 transition-all text-left"
-              >
-                <span className="material-symbols-outlined">hub</span>
-                <span>{'//LOBBY'}</span>
-              </button>
-              <button
-                onClick={() => setModalState('channels')}
-                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
-              >
-                <span className="material-symbols-outlined">settings_ethernet</span>
-                <span>{'//CHANNELS'}</span>
-              </button>
-              <button
-                onClick={() => setModalState('soon')}
-                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
-              >
-                <span className="material-symbols-outlined">security</span>
-                <span>{'//ENCRYPTION'}</span>
-              </button>
-              <button
-                onClick={() => setModalState('soon')}
-                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
-              >
-                <span className="material-symbols-outlined">fingerprint</span>
-                <span>{'//IDENTITY'}</span>
-              </button>
-            </nav>
-          </div>
-
-          <div className="mt-auto px-6">
-            <div className="border border-outline-variant/10 bg-surface-container-low p-4">
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center bg-primary/20">
-                  <span className="material-symbols-outlined text-sm text-primary">person</span>
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-on-surface truncate">{'>'}{myGhost.split('-')[0] || 'SYS_OP'}</div>
-                  <div className="font-mono text-[9px] text-primary/60">STATUS: EPHEMERAL</div>
-                </div>
-              </div>
-              <button onClick={() => window.location.reload()} className="w-full border border-primary/40 bg-transparent py-2 font-headline text-[10px] uppercase tracking-widest text-primary transition-colors hover:bg-primary/10">
-                {'//NEW_PROTOCOL'}
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        {/* Center Main Chat */}
-        <main className="flex h-screen flex-1 flex-col overflow-hidden md:ml-64">
-          <header className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-primary/20 bg-[#131317]/80 px-6 shadow-[0_4px_20px_rgba(139,92,246,0.15)] backdrop-blur-xl md:left-64 xl:right-72">
-            <div className="flex items-center gap-4">
-              <button className="text-on-surface-variant transition-colors hover:text-primary">
-                <span className="material-symbols-outlined">arrow_back_ios</span>
-              </button>
-              <div className="glass-pill flex items-center gap-2 px-4 py-1.5 min-w-[120px]">
-                <span className={`h-2 w-2 rounded-full shadow-[0_0_8px_#d0bcff] ${connected ? 'bg-primary' : 'bg-red-500 animate-pulse'}`} />
-                <span className="font-headline text-xs font-bold uppercase tracking-widest text-primary">
-                  {roomNameDisplay}
-                </span>
-              </div>
-            </div>
-
-            <div className="hidden sm:block">
-              <span className="font-mono text-[10px] tracking-[0.3em] text-on-surface-variant/40">
-                SESSION_ID: {roomNameDisplay.slice(0, 8)}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col items-end">
-                <span className="font-headline text-xs font-bold tracking-tighter text-on-surface uppercase">
-                  {myGhost}
-                </span>
-                <span className="animate-pulse font-mono text-[9px] uppercase text-secondary">ENCRYPTING...</span>
-              </div>
-              <div className="h-10 w-10 overflow-hidden border border-outline-variant/30">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrei3BD05aWPVWD8DXlh_OSM3oTgn2Rpt0vcm9FQiT2gEHX-uavuxRNxcE1AKTKkuOYQcnRjZzXpEAGBKEDq3NHkdz89NoFClPtAlFhKOF-ZEIUvl0HscnSHVbOjUFEecIVlRcEYrK061U_A7ACnfGdExNW4UkRwhLvcB45Dr-xvk9OpuoWPgy7w9-DqLQsgZ2fZVuAQvyJNglTWS_tQ2FPKmirlM8QTRyNAh-8Kvjlx6ATNTyh3Cap84S69Hd5meo7lAPeIDrS-Oy"
-                  alt="Ghost Identity Avatar"
-                  className="h-auto w-full"
-                />
-              </div>
-            </div>
-          </header>
-
-          <section className="custom-scrollbar relative mt-16 flex-1 overflow-y-auto bg-[#050508] pb-4">
-            <div className="dot-grid pointer-events-none absolute inset-0 opacity-[0.06]" />
-
-            <div className="mx-auto flex max-w-4xl flex-col gap-10 px-6 py-10 relative z-10">
-              <div className="flex items-center gap-4 opacity-30">
-                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-on-surface-variant" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
-                  {format(new Date(), 'HH:mm:ss')}_UTC
-                </span>
-                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-on-surface-variant" />
-              </div>
-
-              {error && (
-                <div className="text-center font-mono text-[10px] text-red-500 uppercase tracking-widest bg-red-500/10 py-2 border border-red-500/20">
-                  {error}
-                </div>
-              )}
-              
-              {loading && messages.length === 0 && (
-                <div className="flex items-center gap-2 justify-center py-10 font-mono text-[10px] text-secondary opacity-60 animate-pulse">
-                   <span className="material-symbols-outlined text-xs">sync</span>
-                   <span>SYNCING_HISTORICAL_DATA...</span>
-                </div>
-              )}
-
-              {messages.map((msg) => {
-                const isMe = msg.sender_name === ghostName
-                const time = msg.created_at ? format(new Date(msg.created_at), 'HH:mm:ss') : format(new Date(), 'HH:mm:ss')
-
-                if (isMe) {
-                  return (
-                    <div key={msg.id} className="group ml-auto flex max-w-[85%] flex-col items-end">
-                      <div className="mb-1 mr-1 font-headline text-[9px] uppercase tracking-widest text-primary">
-                        {`//${msg.sender_name}`}
-                      </div>
-                      <div className="shadow-glow-violet relative bg-gradient-to-br from-[#4c1d95] to-[#7c3aed] p-4 shadow-[0_10px_30px_rgba(124,58,237,0.2)]">
-                        <p className="font-body text-sm leading-relaxed text-white break-words">
-                          {msg.content}
-                        </p>
-                        <div 
-                          className="absolute bottom-0 right-0 h-[2px] bg-tertiary-container transition-all duration-[10000ms]" 
-                          style={{ width: getLineLength(msg.content) }}
-                        />
-                      </div>
-                      <div className="mt-2 mr-1 font-mono text-[8px] tracking-widest text-on-surface-variant/30">
-                        {time} — SENT
-                      </div>
-                    </div>
-                  )
-                }
-
-                // Others
-                return (
-                  <div key={msg.id} className="group flex max-w-[85%] flex-col items-start">
-                    <div className="mb-1 ml-1 font-headline text-[9px] uppercase tracking-widest text-secondary">
-                      {`//${msg.sender_name}`}
-                    </div>
-                    <div className="relative border border-primary/20 bg-surface-container-lowest p-4 shadow-xl">
-                      <p className="font-body text-sm leading-relaxed text-on-surface break-words">
-                        {msg.content}
-                      </p>
-                      <div 
-                        className="absolute bottom-0 left-0 h-[2px] bg-tertiary-container transition-all duration-[10000ms]" 
-                        style={{ width: getLineLength(msg.content) }}
-                      />
-                    </div>
-                    <div className="mt-2 ml-1 font-mono text-[8px] tracking-widest text-on-surface-variant/30">
-                      {time} — RECEIVED
-                    </div>
-                  </div>
-                )
-              })}
-
-              <div ref={messagesEndRef} className="h-4 w-full" />
-              
-              {connected && content.length > 0 && (
-                <div className="flex items-center gap-2 px-1 font-mono text-[10px] text-primary opacity-60 animate-pulse">
-                  <span className="material-symbols-outlined text-xs">keyboard_external_input</span>
-                  <span>TRANSMITTING...</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <footer className="z-10 flex h-24 shrink-0 items-center gap-4 border-t border-primary/20 bg-surface-container-lowest px-6 py-4 shadow-[0_-10px_40px_rgba(139,92,246,0.1)] backdrop-blur-xl">
-            <div className="flex h-10 w-10 items-center justify-center border border-outline-variant/20 text-on-surface-variant">
-              <span className="material-symbols-outlined text-lg">{connected ? 'lock' : 'lock_open'}</span>
-            </div>
-
-            <form onSubmit={handleSend} className="relative h-full flex-1">
-              <input
-                type="text"
-                placeholder={connected ? "TYPE AND DISAPPEAR..." : "UPLINK DISCONNECTED..."}
-                disabled={!connected}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="h-full w-full border-none bg-transparent font-mono text-sm tracking-wider text-primary placeholder:text-on-surface-variant/20 focus:ring-0 outline-none disabled:opacity-50"
-                autoComplete="off"
-              />
-              <button type="submit" className="hidden" />
-            </form>
-
-            <div className="flex items-center gap-6">
-              <div className="hidden items-center gap-4 border-l border-outline-variant/10 pl-6 lg:flex">
-                <button onClick={() => setModalState('soon')} className="text-on-surface-variant transition-colors hover:text-primary">
-                  <span className="material-symbols-outlined" data-weight="fill">
-                    attach_file
-                  </span>
-                </button>
-                <button onClick={() => setModalState('soon')} className="text-on-surface-variant transition-colors hover:text-primary">
-                  <span className="material-symbols-outlined">mic</span>
-                </button>
-              </div>
-
-              <button 
-                onClick={handleSend}
-                disabled={!content.trim() || !connected}
-                className="group flex h-14 w-14 shrink-0 items-center justify-center border border-primary bg-transparent text-primary transition-all hover:bg-primary hover:text-surface-dim active:scale-95 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-primary disabled:active:scale-100"
-              >
-                <span className="material-symbols-outlined text-2xl transition-transform group-hover:-translate-y-1 group-hover:translate-x-1">
-                  send
-                </span>
-              </button>
-            </div>
-          </footer>
-        </main>
-
-        {/* Right Sidebar */}
-        <aside className="fixed right-0 top-0 z-30 hidden h-screen w-72 flex-col border-l border-white/5 bg-surface-container-lowest p-6 xl:flex">
-          <div className="space-y-8 mt-16">
-            <div>
-              <div className="mb-4 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/40">
-                Node_Status
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-end justify-between">
-                  <span className="font-mono text-[9px] uppercase text-on-surface-variant">Latency</span>
-                  <span className="font-headline text-xs text-secondary">{connected ? '24MS' : 'ERR_MS'}</span>
-                </div>
-                <div className="h-[1px] w-full bg-surface-container-high relative">
-                  <div className={`h-full bg-secondary transition-all ${connected ? 'w-[24%]' : 'w-[0%]'}`} />
-                </div>
-                <div className="flex items-end justify-between">
-                  <span className="font-mono text-[9px] uppercase text-on-surface-variant">Uplink_Load</span>
-                  <span className="font-headline text-xs text-primary">{content.length > 0 ? ((content.length / 500) * 100).toFixed(2) : '0.08'}%</span>
-                </div>
-                <div className="h-[1px] w-full bg-surface-container-high relative">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${Math.max((content.length / 500) * 100, 8)}%` }} />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-4 font-headline text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/40">
-                Active_Shadows
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className={`h-2 w-2 rounded-full ${connected ? 'bg-secondary animate-pulse' : 'bg-red-500'}`} />
-                  <span className="font-mono text-[10px] uppercase text-on-surface">{myGhost}</span>
-                </div>
-                
-                {/* Find other unique senders to populate active shadows dynamically */}
-                {Array.from(new Set(messages.map(m => m.sender_name).filter(n => n !== ghostName))).slice(0, 4).map(name => (
-                  <div key={name} className="flex items-center gap-3 opacity-60">
-                    <div className="h-2 w-2 rounded-full bg-on-surface-variant animate-pulse" />
-                    <span className="font-mono text-[10px] uppercase text-on-surface truncate pr-2" title={name}>{name}</span>
-                  </div>
-                ))}
-                
-                {messages.length === 0 && (
-                  <div className="flex items-center gap-3 opacity-40">
-                    <div className="h-2 w-2 rounded-full bg-on-surface-variant" />
-                    <span className="font-mono text-[10px] uppercase text-on-surface">NULL_ENTITY</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-8">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuACrFE8UOh9EjugPZlHMo4_lqp2y7v0eNu-VHXPjptr2P_fCWB3yYmS4PJgM6F6oQMYfRowWLRu5n3C_x1PZON6jaG2dDjmeVVjSvXHw5fPDYYslozVCnpXP9Aaqk0CMzzzD7IHZSmjtlCcdQi2wRn5cqj1UvP20c3F7HIXUFkuoyE6J_jBisRFaWxi-h4DaM34ACc1eZpav16ojVCzUK8of28O30fUgR0h4TS1H2YSIL-4Ply5y2F_20pfar-S5uEuhtth6pSrkZOF"
-                alt="Active Node Map"
-                className="w-full border border-outline-variant/10 opacity-70 hover:opacity-100 transition-opacity mix-blend-screen"
-              />
-              <div className="mt-2 font-mono text-[8px] tracking-tighter text-on-surface-variant/20">
-                DATASET: GLOBAL_PROXIMITY_V2
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Mobile Bottom Nav */}
-        <nav className="fixed bottom-0 left-0 z-50 flex h-16 w-full items-center justify-around border-t border-primary/20 bg-[#131317]/90 backdrop-blur-xl px-4 md:hidden shadow-[0_-5px_20px_rgba(139,92,246,0.1)]">
-          <button onClick={() => setModalState('channels')} className="flex flex-col items-center gap-1 text-primary active:scale-95 transition-transform">
-            <span className="material-symbols-outlined">hub</span>
-            <span className="font-headline text-[8px]">LOBBY</span>
-          </button>
-          <button onClick={() => setModalState('channels')} className="flex flex-col items-center gap-1 text-on-surface-variant hover:text-primary transition-colors active:scale-95">
-            <span className="material-symbols-outlined">settings_ethernet</span>
-            <span className="font-headline text-[8px]">CHANNELS</span>
-          </button>
-          <button onClick={() => setModalState('soon')} className="flex flex-col items-center gap-1 text-on-surface-variant/40 hover:text-primary transition-colors active:scale-95">
-            <span className="material-symbols-outlined">security</span>
-            <span className="font-headline text-[8px]">ENCRYPT</span>
-          </button>
-          <button onClick={() => setModalState('soon')} className="flex flex-col items-center gap-1 text-on-surface-variant/40 hover:text-primary transition-colors active:scale-95">
-            <span className="material-symbols-outlined">fingerprint</span>
-            <span className="font-headline text-[8px]">IDENTITY</span>
-          </button>
-        </nav>
-
-      </div>
     </>
   )
 }
