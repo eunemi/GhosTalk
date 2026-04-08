@@ -6,16 +6,14 @@ import { useRoom } from '@/lib/useRoom'
 import { format } from 'date-fns'
 
 const PREDEFINED_ROOMS = [
-  { id: 'hot_takes', name: 'HOT_TAKES', emoji: '🔥', specters: '342' },
-  { id: 'confessions', name: 'CONFESSIONS', emoji: '👻', specters: '158' },
-  { id: 'shower_thoughts', name: 'SHOWER_THOUGHTS', emoji: '💡', specters: '89' },
-  { id: 'late_night', name: 'LATE_NIGHT', emoji: '🌙', specters: '2.4K' },
-  { id: 'rants', name: 'RANTS', emoji: '😤', specters: '67' },
+  { id: 'shadow_reserve', name: 'SHADOW_RESERVE' },
+  { id: 'global_tether', name: 'GLOBAL_TETHER' },
+  { id: 'dark_sector', name: 'DARK_SECTOR' },
 ]
 
 export default function Home() {
   const { ghostName } = useGhostAuth()
-  const [currentRoom, setCurrentRoom] = useState('hot_takes')
+  const [currentRoom, setCurrentRoom] = useState('shadow_reserve')
   const { messages, connected, sendMessage, error, loading } = useRoom(currentRoom)
   
   const [content, setContent] = useState('')
@@ -81,11 +79,8 @@ export default function Home() {
                       }}
                       className={`w-full flex items-center justify-between p-4 border transition-all ${currentRoom === r.id ? 'border-secondary bg-secondary/10 text-secondary shadow-[0_0_15px_rgba(76,215,246,0.2)]' : 'border-outline-variant/20 text-on-surface-variant hover:border-primary/50 hover:bg-primary/5 hover:text-primary'}`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span>{r.emoji}</span>
-                        <span className="font-mono text-[10px] tracking-wider uppercase">{r.name}</span>
-                      </div>
-                      <span className="font-mono text-[8px] text-on-surface-variant/50">{r.specters} ONLINE</span>
+                      <span className="font-mono text-[10px] tracking-wider uppercase">{r.name}</span>
+                      {currentRoom === r.id && <span className="material-symbols-outlined text-sm animate-pulse">wifi_tethering</span>}
                     </button>
                   ))}
                 </div>
@@ -106,48 +101,41 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1 px-3">
-            <div className="mb-4 px-3 font-headline text-[10px] uppercase tracking-[0.2em] text-[#cbc3d7]/30">
-              {'// ACTIVE CHANNELS'}
+          <div className="flex-1 space-y-2">
+            <div className="mb-4 px-6 font-headline text-[10px] uppercase tracking-[0.2em] text-[#cbc3d7]/30">
+              Main Access
             </div>
-            {PREDEFINED_ROOMS.map(room => (
-              <button
-                key={room.id}
-                onClick={() => setCurrentRoom(room.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 border-l-2 transition-all text-left ${
-                  currentRoom === room.id
-                    ? 'border-cyan-400 bg-white/5 text-cyan-400'
-                    : 'border-transparent text-[#cbc3d7]/50 hover:bg-violet-900/10 hover:text-violet-200 hover:border-violet-500/50'
-                }`}
-              >
-                <span className="text-lg">{room.emoji}</span>
-                <div className="flex flex-col">
-                  <span className="font-mono text-[10px] tracking-wider uppercase">{room.name}</span>
-                  <span className="font-mono text-[8px] text-[#cbc3d7]/30">{room.specters} SPECTERS ONLINE</span>
-                </div>
-                {currentRoom === room.id && (
-                  <span className="material-symbols-outlined text-xs ml-auto animate-pulse">wifi_tethering</span>
-                )}
-              </button>
-            ))}
 
-            <div className="mt-6 mb-4 px-3 font-headline text-[10px] uppercase tracking-[0.2em] text-[#cbc3d7]/30">
-              {'// SYSTEM'}
-            </div>
-            <button
-              onClick={() => setModalState('soon')}
-              className="w-full flex items-center gap-3 px-3 py-3 border-l-2 border-transparent text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 hover:border-violet-500/50 text-left"
-            >
-              <span className="material-symbols-outlined text-lg">security</span>
-              <span className="font-mono text-[10px] tracking-wider uppercase">ENCRYPTION</span>
-            </button>
-            <button
-              onClick={() => setModalState('soon')}
-              className="w-full flex items-center gap-3 px-3 py-3 border-l-2 border-transparent text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 hover:border-violet-500/50 text-left"
-            >
-              <span className="material-symbols-outlined text-lg">fingerprint</span>
-              <span className="font-mono text-[10px] tracking-wider uppercase">IDENTITY</span>
-            </button>
+            <nav className="space-y-1">
+              <button
+                onClick={() => setModalState('channels')}
+                className="w-full flex items-center gap-4 border-l-2 border-cyan-400 bg-white/5 py-3 pl-4 font-label text-sm uppercase text-cyan-400 transition-all text-left"
+              >
+                <span className="material-symbols-outlined">hub</span>
+                <span>{'//LOBBY'}</span>
+              </button>
+              <button
+                onClick={() => setModalState('channels')}
+                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
+              >
+                <span className="material-symbols-outlined">settings_ethernet</span>
+                <span>{'//CHANNELS'}</span>
+              </button>
+              <button
+                onClick={() => setModalState('soon')}
+                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
+              >
+                <span className="material-symbols-outlined">security</span>
+                <span>{'//ENCRYPTION'}</span>
+              </button>
+              <button
+                onClick={() => setModalState('soon')}
+                className="w-full flex items-center gap-4 py-3 pl-4 font-label text-sm uppercase text-[#cbc3d7]/50 transition-all hover:bg-violet-900/10 hover:text-violet-200 text-left border-l-2 border-transparent"
+              >
+                <span className="material-symbols-outlined">fingerprint</span>
+                <span>{'//IDENTITY'}</span>
+              </button>
+            </nav>
           </div>
 
           <div className="mt-auto px-6">
@@ -403,6 +391,10 @@ export default function Home() {
         {/* Mobile Bottom Nav */}
         <nav className="fixed bottom-0 left-0 z-50 flex h-16 w-full items-center justify-around border-t border-primary/20 bg-[#131317]/90 backdrop-blur-xl px-4 md:hidden shadow-[0_-5px_20px_rgba(139,92,246,0.1)]">
           <button onClick={() => setModalState('channels')} className="flex flex-col items-center gap-1 text-primary active:scale-95 transition-transform">
+            <span className="material-symbols-outlined">hub</span>
+            <span className="font-headline text-[8px]">LOBBY</span>
+          </button>
+          <button onClick={() => setModalState('channels')} className="flex flex-col items-center gap-1 text-on-surface-variant hover:text-primary transition-colors active:scale-95">
             <span className="material-symbols-outlined">settings_ethernet</span>
             <span className="font-headline text-[8px]">CHANNELS</span>
           </button>
