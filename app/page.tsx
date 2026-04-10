@@ -67,7 +67,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'confessions',
     name: 'CONFESSIONS',
     emoji: '👻',
-    description: 'Secrets safe hain yahan. Judge-free zone.',
+    description: 'Your secrets are safe here. Judge-free zone.',
     specters: 158,
     messages: 876,
     trend: '+12%',
@@ -77,7 +77,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'shower_thoughts',
     name: 'SHOWER_THOUGHTS',
     emoji: '💡',
-    description: 'Weird ideas jo suddenly aate hain.',
+    description: 'Random ideas that pop into your head.',
     specters: 89,
     messages: 445,
     trend: '+8%',
@@ -97,7 +97,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'rants',
     name: 'RANTS',
     emoji: '😤',
-    description: 'Vent out. Sab sunte hain yahan.',
+    description: 'Vent out. Everyone listens here.',
     specters: 67,
     messages: 234,
     trend: '+3%',
@@ -107,7 +107,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'tech_ghosts',
     name: 'TECH_GHOSTS',
     emoji: '💻',
-    description: 'Developers, designers, builders — sab yahan.',
+    description: 'Developers, designers, builders — all welcome.',
     specters: 203,
     messages: 967,
     trend: '+19%',
@@ -117,7 +117,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'midnight_music',
     name: 'MIDNIGHT_MUSIC',
     emoji: '🎵',
-    description: 'Songs share karo. Playlist banao anonymously.',
+    description: 'Share songs. Build playlists anonymously.',
     specters: 134,
     messages: 589,
     trend: '+11%',
@@ -127,7 +127,7 @@ const TRENDING_ROOMS: TrendingRoom[] = [
     id: 'ghost_kitchen',
     name: 'GHOST_KITCHEN',
     emoji: '🍜',
-    description: 'Food lovers ka secret hangout.',
+    description: 'The secret hangout for food lovers.',
     specters: 78,
     messages: 312,
     trend: '+5%',
@@ -139,50 +139,50 @@ const GUIDELINES: Guideline[] = [
   {
     type: 'do',
     icon: '✅',
-    title: 'Anonymous Raho',
-    desc: 'Apni ya kisi aur ki real identity share mat karo. Yahan sab ghosts hain.',
+    title: 'Stay Anonymous',
+    desc: 'Do not share your or anyone else\'s real identity. Everyone is a ghost here.',
   },
   {
     type: 'do',
     icon: '✅',
-    title: 'Freely Bolo',
-    desc: 'Ye safe space hai. Apne thoughts, feelings aur secrets freely share karo.',
+    title: 'Speak Freely',
+    desc: 'This is a safe space. Share your thoughts, feelings and secrets freely.',
   },
   {
     type: 'do',
     icon: '✅',
-    title: 'Respect Karo',
-    desc: 'Opinions alag ho sakte hain — personal attacks allowed nahi hain.',
+    title: 'Be Respectful',
+    desc: 'Opinions can differ — personal attacks are not allowed.',
   },
   {
     type: 'do',
     icon: '✅',
-    title: 'Private Rooms Use Karo',
-    desc: 'Agar close friends se baat karni hai toh private room create karo aur link share karo.',
+    title: 'Use Private Rooms',
+    desc: 'To talk with close friends, create a private room and share the link.',
   },
   {
     type: 'dont',
     icon: '❌',
-    title: 'Harassment Mat Karo',
-    desc: 'Kisi ko bhi target karke bura bolna strictly banned hai.',
+    title: 'No Harassment',
+    desc: 'Targeting anyone with harmful messages is strictly banned.',
   },
   {
     type: 'dont',
     icon: '❌',
-    title: 'Personal Info Mat Maango',
-    desc: 'Kisi ka naam, location, phone ya koi bhi personal detail mat maango.',
+    title: 'No Personal Info Requests',
+    desc: 'Do not ask for anyone\'s name, location, phone or any personal details.',
   },
   {
     type: 'dont',
     icon: '❌',
-    title: 'Spam Mat Karo',
-    desc: 'Ek hi message baar baar mat bhejo. Links aur ads strictly prohibited hain.',
+    title: 'No Spamming',
+    desc: 'Do not send the same message repeatedly. Links and ads are strictly prohibited.',
   },
   {
     type: 'dont',
     icon: '❌',
-    title: 'Illegal Content Nahi',
-    desc: 'Koi bhi illegal, harmful ya explicit content share karna banned hai.',
+    title: 'No Illegal Content',
+    desc: 'Sharing any illegal, harmful or explicit content is strictly banned.',
   },
 ]
 
@@ -722,7 +722,7 @@ export default function Home() {
                 <div className="mb-6">
                   <h2 className="font-headline text-2xl font-bold text-on-surface">Discover</h2>
                   <p className="text-slate-400 text-sm mt-1">
-                    🔥 Trending rooms — abhi sabse zyada active
+                    🔥 Trending rooms — most active right now
                   </p>
                 </div>
 
@@ -815,7 +815,7 @@ export default function Home() {
                 <div className="mb-6">
                   <h2 className="font-headline text-2xl font-bold text-on-surface">Guidelines</h2>
                   <p className="text-slate-400 text-sm mt-1">
-                    GhosTalk ko safe aur fun banane ke liye kuch simple rules.
+                    A few simple rules to keep GhosTalk safe and fun.
                   </p>
                 </div>
 
@@ -873,8 +873,8 @@ export default function Home() {
                 <div className="mt-6 border border-outline-variant/20 rounded-2xl p-4 bg-white/50 backdrop-blur-sm text-center">
                   <div className="text-2xl mb-2">👻</div>
                   <div className="text-xs text-slate-400 leading-relaxed">
-                    GhosTalk ek anonymous platform hai. Sab messages 4 ghante mein
-                    auto-delete ho jaate hain. Apni privacy protect karo.
+                    GhosTalk is an anonymous platform. All messages auto-delete after 4 hours.
+                    Protect your privacy.
                   </div>
                 </div>
 
