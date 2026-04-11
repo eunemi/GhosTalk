@@ -4,11 +4,11 @@ import { format } from 'date-fns'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
-  IoHomeOutline,
-  IoVideocamOutline,
-  IoCameraOutline,
-  IoShareSocialOutline,
-  IoHeartOutline,
+  IoGridOutline,
+  IoCompassOutline,
+  IoDocumentTextOutline,
+  IoChatbubblesOutline,
+  IoSettingsOutline,
 } from 'react-icons/io5'
 import GradientMenu from '@/components/ui/gradient-menu'
 import { useGhostAuth } from '@/lib/useGhostAuth'
@@ -33,13 +33,6 @@ const GHOST_AVATARS = [
   '🦇', '🐍', '🦁', '🐯', '🦈',
   '🦂', '🐙', '🦋', '🐦‍⬛', '🦎',
   '🐸', '🦉', '🦚', '🐲', '🔮',
-]
-
-const MOOD_TAGS = [
-  { label: 'Gratitude', className: 'bg-primary-container/20 text-primary border-primary/10' },
-  { label: 'Peaceful', className: 'bg-secondary-container/30 text-secondary border-secondary/10' },
-  { label: 'Curious', className: 'bg-tertiary-container/20 text-tertiary border-tertiary/10' },
-  { label: 'Sleepy', className: 'bg-surface-container-high text-on-surface-variant border-outline-variant/10' },
 ]
 
 interface TrendingRoom {
@@ -220,6 +213,7 @@ export default function Home() {
   const [nameError, setNameError] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<string>('')
+  const [selectedMood, setSelectedMood] = useState<string>('')
   const [createdRoomLink, setCreatedRoomLink] = useState<string>('')
   const [showRoomCreated, setShowRoomCreated] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -235,6 +229,12 @@ export default function Home() {
   useEffect(() => {
     const saved = localStorage.getItem('ghost-avatar')
     if (saved) setSelectedAvatar(saved)
+  }, [])
+
+  // Restore saved mood on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('ghost-mood')
+    if (saved) setSelectedMood(saved)
   }, [])
 
   // Auto-join room from URL
@@ -297,6 +297,12 @@ export default function Home() {
     setSelectedAvatar(emoji)
     localStorage.setItem('ghost-avatar', emoji)
     supabase.auth.updateUser({ data: { ghost_avatar: emoji } }).catch(console.error)
+  }
+
+  // Mood select + persist
+  const handleMoodSelect = (mood: string) => {
+    setSelectedMood(mood)
+    localStorage.setItem('ghost-mood', mood)
   }
 
   // Create private room
@@ -395,35 +401,35 @@ export default function Home() {
   const navItems = [
     {
       title: 'Rooms',
-      icon: <IoHomeOutline />,
+      icon: <IoGridOutline />,
       gradientFrom: '#a955ff',
       gradientTo: '#ea51ff',
       onClick: () => setActiveTab('rooms'),
     },
     {
       title: 'Discover',
-      icon: <IoVideocamOutline />,
+      icon: <IoCompassOutline />,
       gradientFrom: '#56CCF2',
       gradientTo: '#2F80ED',
       onClick: () => setActiveTab('discover'),
     },
     {
       title: 'Guidelines',
-      icon: <IoCameraOutline />,
+      icon: <IoDocumentTextOutline />,
       gradientFrom: '#FF9966',
       gradientTo: '#FF5E62',
       onClick: () => setActiveTab('guidelines'),
     },
     {
       title: 'Chat',
-      icon: <IoShareSocialOutline />,
+      icon: <IoChatbubblesOutline />,
       gradientFrom: '#80FF72',
       gradientTo: '#7EE8FA',
       onClick: () => setActiveTab('rooms'),
     },
     {
       title: 'Settings',
-      icon: <IoHeartOutline />,
+      icon: <IoSettingsOutline />,
       gradientFrom: '#ffa9c6',
       gradientTo: '#f434e2',
       onClick: () => setShowSettings(true),
@@ -455,7 +461,7 @@ export default function Home() {
           </span>
         </div>
 
-        <div className="flex items-center gap-4 sm:gap-8">
+        <div className="hidden items-center gap-4 sm:gap-8 md:flex">
           <GradientMenu items={navItems} />
         </div>
       </header>
@@ -477,11 +483,10 @@ export default function Home() {
                     key={room.id}
                     type="button"
                     onClick={() => setCurrentRoom(room.id)}
-                    className={`mx-4 flex items-center gap-4 px-8 py-3 text-left font-body text-lg font-medium transition-transform duration-200 ${
-                      isActive
+                    className={`mx-4 flex items-center gap-4 px-8 py-3 text-left font-body text-lg font-medium transition-transform duration-200 ${isActive
                         ? 'rounded-full bg-emerald-100/60 text-emerald-800'
                         : 'text-slate-600 hover:translate-x-1'
-                    }`}
+                      }`}
                   >
                     <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>
                       {room.icon}
@@ -492,76 +497,7 @@ export default function Home() {
               })}
             </nav>
 
-            <button
-              type="button"
-              onClick={createPrivateRoom}
-              className="group relative mx-6 mt-6 overflow-hidden rounded-xl border border-secondary/10 bg-secondary-container/40 p-6 text-left transition-all hover:bg-secondary-container/60"
-            >
-              <div className="relative z-10">
-                <h4 className="font-headline font-bold text-secondary">New Sanctuary?</h4>
-                <p className="mt-1 text-xs text-on-secondary-container/80">Host your own private discussion space.</p>
-                <div className="mt-4 flex items-center text-sm font-bold text-secondary">
-                  <span>Create Room</span>
-                  <span className="material-symbols-outlined ml-2 text-sm">add_circle</span>
-                </div>
-              </div>
-              <div className="absolute -bottom-4 -right-4 opacity-10 transition-transform group-hover:scale-110">
-                <span className="material-symbols-outlined text-6xl">spa</span>
-              </div>
-            </button>
 
-            {/* My Sanctuaries */}
-            {myRooms.length > 0 && (
-              <div className="mx-6 mt-4">
-                <div className="mb-2 font-label text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                  My Sanctuaries
-                </div>
-                <div className="space-y-1">
-                  {myRooms.map((roomId) => (
-                    <button
-                      key={roomId}
-                      type="button"
-                      onClick={() => {
-                        setCurrentRoom(roomId)
-                        window.history.pushState({}, '', `?room=${roomId}`)
-                      }}
-                      className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-all ${
-                        currentRoom === roomId
-                          ? 'bg-primary-container/30 text-primary'
-                          : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-700'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-sm">lock</span>
-                      <span className="font-label text-[10px] font-semibold uppercase tracking-wider truncate">
-                        {roomId.split('-').slice(0, 2).join('-')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-auto px-6">
-              <div className="flex items-center gap-3 rounded-full border border-outline-variant/10 bg-surface-container-lowest p-3 shadow-sm">
-                <div className="flex size-10 items-center justify-center rounded-full bg-primary-container/30 text-lg">
-                  {selectedAvatar || '👻'}
-                </div>
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <p className="truncate font-headline text-sm font-bold">{myGhost}</p>
-                  <p className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
-                    {connected ? 'Online' : 'Reconnecting'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(true)}
-                  className="text-slate-400 transition-colors hover:text-primary"
-                  aria-label="Open Settings"
-                >
-                  <span className="material-symbols-outlined">settings</span>
-                </button>
-              </div>
-            </div>
           </aside>
         )}
 
@@ -578,7 +514,6 @@ export default function Home() {
                   </span>
                 </div>
                 <p className="mt-0.5 flex items-center gap-1 font-label text-xs text-slate-500">
-                  <span className="material-symbols-outlined text-sm text-tertiary">colors_spark</span>
                   Spread good vibes
                 </p>
               </div>
@@ -601,11 +536,10 @@ export default function Home() {
                     key={room.id}
                     type="button"
                     onClick={() => setCurrentRoom(room.id)}
-                    className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-label text-xs font-semibold transition-colors ${
-                      isActive
+                    className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-label text-xs font-semibold transition-colors ${isActive
                         ? 'border-primary/20 bg-primary-container/50 text-primary'
                         : 'border-outline-variant/20 bg-white/50 text-slate-600'
-                    }`}
+                      }`}
                   >
                     {room.name}
                   </button>
@@ -799,7 +733,7 @@ export default function Home() {
                           </span>
                           <div className="text-[10px] text-slate-400 font-mono">
                             {room.specters >= 1000
-                              ? `${(room.specters/1000).toFixed(1)}K`
+                              ? `${(room.specters / 1000).toFixed(1)}K`
                               : room.specters} 👻
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono">
@@ -916,13 +850,66 @@ export default function Home() {
               <p className="mt-4 text-[10px] font-bold text-tertiary">- Anonymous Friend</p>
             </div>
 
-            <h3 className="mb-6 font-headline text-sm font-bold uppercase tracking-widest text-slate-400">Online Moods</h3>
-            <div className="flex flex-wrap gap-2">
-              {MOOD_TAGS.map((tag) => (
-                <span key={tag.label} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${tag.className}`}>
-                  {tag.label}
-                </span>
-              ))}
+            {/* Online Moods Section */}
+            <div className="space-y-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/40">
+                Online Moods
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+
+                {/* Gratitude — Teal */}
+                <button
+                  type="button"
+                  onClick={() => handleMoodSelect('gratitude')}
+                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-teal ${
+                    selectedMood === 'gratitude' ? 'active scale-105' : 'hover:scale-105'
+                  }`}
+                >
+                  ✨ Gratitude
+                </button>
+
+                {/* Peaceful — Green */}
+                <button
+                  type="button"
+                  onClick={() => handleMoodSelect('peaceful')}
+                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-green ${
+                    selectedMood === 'peaceful' ? 'active scale-105' : 'hover:scale-105'
+                  }`}
+                >
+                  🌿 Peaceful
+                </button>
+
+                {/* Curious — Pink */}
+                <button
+                  type="button"
+                  onClick={() => handleMoodSelect('curious')}
+                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-pink ${
+                    selectedMood === 'curious' ? 'active scale-105' : 'hover:scale-105'
+                  }`}
+                >
+                  🔮 Curious
+                </button>
+
+                {/* Sleepy — Gray */}
+                <button
+                  type="button"
+                  onClick={() => handleMoodSelect('sleepy')}
+                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-gray ${
+                    selectedMood === 'sleepy' ? 'active scale-105' : 'hover:scale-105'
+                  }`}
+                >
+                  🌙 Sleepy
+                </button>
+
+              </div>
+
+              {/* Selected mood display */}
+              {selectedMood && (
+                <div className="font-mono text-[9px] text-on-surface-variant/30 uppercase mt-1">
+                  Current mood: {selectedMood}
+                </div>
+              )}
             </div>
 
             <div className="mt-8">
@@ -945,18 +932,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-auto pt-8">
-              <div className="rounded-xl bg-gradient-to-br from-primary to-sky-700 p-4 text-white">
-                <p className="text-xs font-bold uppercase tracking-tight opacity-80">Current Goal</p>
-                <p className="mt-1 font-headline text-lg font-bold leading-tight">1,000 Ghost Messages Today</p>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full rounded-full bg-white" style={{ width: `${progressPercent}%` }} />
-                </div>
-                <p className="mt-2 text-right text-[10px] font-bold">
-                  {goalCount.toLocaleString()}/1,000
-                </p>
-              </div>
-            </div>
+
           </aside>
         )}
       </div>
@@ -965,9 +941,8 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setActiveTab('rooms')}
-          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${
-            activeTab === 'rooms' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
-          }`}
+          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${activeTab === 'rooms' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
+            }`}
         >
           <span className="material-symbols-outlined" style={activeTab === 'rooms' ? { fontVariationSettings: "'FILL' 1" } : undefined}>
             grid_view
@@ -977,9 +952,8 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setActiveTab('discover')}
-          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${
-            activeTab === 'discover' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
-          }`}
+          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${activeTab === 'discover' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
+            }`}
         >
           <span className="material-symbols-outlined" style={activeTab === 'discover' ? { fontVariationSettings: "'FILL' 1" } : undefined}>
             explore
@@ -989,9 +963,8 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setActiveTab('guidelines')}
-          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${
-            activeTab === 'guidelines' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
-          }`}
+          className={`flex flex-col items-center justify-center rounded-[2rem] px-6 py-2 transition-all ${activeTab === 'guidelines' ? 'scale-110 bg-sky-100 text-sky-800' : 'text-slate-400 hover:bg-slate-100'
+            }`}
         >
           <span className="material-symbols-outlined" style={activeTab === 'guidelines' ? { fontVariationSettings: "'FILL' 1" } : undefined}>
             gavel
@@ -1091,11 +1064,10 @@ export default function Home() {
                     type="button"
                     onClick={saveCustomName}
                     disabled={!customName.trim() || nameSaved}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${
-                      nameSaved
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${nameSaved
                         ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
                         : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed'
-                    }`}
+                      }`}
                   >
                     {nameSaved ? (
                       <>
@@ -1126,11 +1098,10 @@ export default function Home() {
                       type="button"
                       key={`${emoji}-${idx}`}
                       onClick={() => saveAvatar(emoji)}
-                      className={`flex items-center justify-center h-12 w-full text-2xl rounded-xl border transition-all hover:scale-110 active:scale-95 ${
-                        selectedAvatar === emoji
+                      className={`flex items-center justify-center h-12 w-full text-2xl rounded-xl border transition-all hover:scale-110 active:scale-95 ${selectedAvatar === emoji
                           ? 'border-primary/60 bg-primary-container/30 shadow-[0_0_12px_rgba(0,101,144,0.2)]'
                           : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       {emoji}
                     </button>
@@ -1286,11 +1257,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={copyRoomLink}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${
-                  linkCopied
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${linkCopied
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
                     : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-sm">
                   {linkCopied ? 'check_circle' : 'content_copy'}
