@@ -11,6 +11,7 @@ import {
   IoSettingsOutline,
 } from 'react-icons/io5'
 import GradientMenu from '@/components/ui/gradient-menu'
+import LandingPage from '@/components/ui/landing-page'
 import { useGhostAuth } from '@/lib/useGhostAuth'
 import { useRoom } from '@/lib/useRoom'
 import { createClient } from '@/lib/supabaseClient'
@@ -33,6 +34,13 @@ const GHOST_AVATARS = [
   '🦇', '🐍', '🦁', '🐯', '🦈',
   '🦂', '🐙', '🦋', '🐦‍⬛', '🦎',
   '🐸', '🦉', '🦚', '🐲', '🔮',
+]
+
+const MOOD_TAGS = [
+  { label: 'Gratitude', className: 'bg-primary-container/20 text-primary border-primary/10' },
+  { label: 'Peaceful', className: 'bg-secondary-container/30 text-secondary border-secondary/10' },
+  { label: 'Curious', className: 'bg-tertiary-container/20 text-tertiary border-tertiary/10' },
+  { label: 'Sleepy', className: 'bg-surface-container-high text-on-surface-variant border-outline-variant/10' },
 ]
 
 interface TrendingRoom {
@@ -203,6 +211,10 @@ function avatarTone(name: string): string {
 
 export default function Home() {
   const { ghostName, loading: authLoading } = useGhostAuth()
+  const [showLanding, setShowLanding] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return !localStorage.getItem('ghost-visited')
+  })
   const [currentRoom, setCurrentRoom] = useState(ROOMS[0].id)
   const [activeTab, setActiveTab] = useState<'rooms' | 'discover' | 'guidelines'>('rooms')
   const { messages, connected, sendMessage, error, loading, MAX_MESSAGE_LENGTH } = useRoom(currentRoom)
@@ -213,7 +225,6 @@ export default function Home() {
   const [nameError, setNameError] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<string>('')
-  const [selectedMood, setSelectedMood] = useState<string>('')
   const [createdRoomLink, setCreatedRoomLink] = useState<string>('')
   const [showRoomCreated, setShowRoomCreated] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -229,12 +240,6 @@ export default function Home() {
   useEffect(() => {
     const saved = localStorage.getItem('ghost-avatar')
     if (saved) setSelectedAvatar(saved)
-  }, [])
-
-  // Restore saved mood on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('ghost-mood')
-    if (saved) setSelectedMood(saved)
   }, [])
 
   // Auto-join room from URL
@@ -297,12 +302,6 @@ export default function Home() {
     setSelectedAvatar(emoji)
     localStorage.setItem('ghost-avatar', emoji)
     supabase.auth.updateUser({ data: { ghost_avatar: emoji } }).catch(console.error)
-  }
-
-  // Mood select + persist
-  const handleMoodSelect = (mood: string) => {
-    setSelectedMood(mood)
-    localStorage.setItem('ghost-mood', mood)
   }
 
   // Create private room
@@ -447,6 +446,23 @@ export default function Home() {
     await submitMessage()
   }
 
+  if (showLanding) {
+    return (
+      <>
+        <div className="organic-blob bg-primary-container size-[38rem] -top-52 -left-48" />
+        <div className="organic-blob bg-tertiary-container size-[30rem] -bottom-24 -right-20" />
+        <div className="organic-blob bg-secondary-container size-[26rem] top-1/3 right-1/4" />
+        <LandingPage
+          onEnter={() => {
+            localStorage.setItem('ghost-visited', 'true')
+            setShowLanding(false)
+          }}
+          ghostName={myGhost}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <div className="organic-blob bg-primary-container size-[38rem] -top-52 -left-48" />
@@ -484,8 +500,8 @@ export default function Home() {
                     type="button"
                     onClick={() => setCurrentRoom(room.id)}
                     className={`mx-4 flex items-center gap-4 px-8 py-3 text-left font-body text-lg font-medium transition-transform duration-200 ${isActive
-                        ? 'rounded-full bg-emerald-100/60 text-emerald-800'
-                        : 'text-slate-600 hover:translate-x-1'
+                      ? 'rounded-full bg-emerald-100/60 text-emerald-800'
+                      : 'text-slate-600 hover:translate-x-1'
                       }`}
                   >
                     <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>
@@ -537,8 +553,8 @@ export default function Home() {
                     type="button"
                     onClick={() => setCurrentRoom(room.id)}
                     className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-label text-xs font-semibold transition-colors ${isActive
-                        ? 'border-primary/20 bg-primary-container/50 text-primary'
-                        : 'border-outline-variant/20 bg-white/50 text-slate-600'
+                      ? 'border-primary/20 bg-primary-container/50 text-primary'
+                      : 'border-outline-variant/20 bg-white/50 text-slate-600'
                       }`}
                   >
                     {room.name}
@@ -850,66 +866,13 @@ export default function Home() {
               <p className="mt-4 text-[10px] font-bold text-tertiary">- Anonymous Friend</p>
             </div>
 
-            {/* Online Moods Section */}
-            <div className="space-y-3">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/40">
-                Online Moods
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-
-                {/* Gratitude — Teal */}
-                <button
-                  type="button"
-                  onClick={() => handleMoodSelect('gratitude')}
-                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-teal ${
-                    selectedMood === 'gratitude' ? 'active scale-105' : 'hover:scale-105'
-                  }`}
-                >
-                  ✨ Gratitude
-                </button>
-
-                {/* Peaceful — Green */}
-                <button
-                  type="button"
-                  onClick={() => handleMoodSelect('peaceful')}
-                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-green ${
-                    selectedMood === 'peaceful' ? 'active scale-105' : 'hover:scale-105'
-                  }`}
-                >
-                  🌿 Peaceful
-                </button>
-
-                {/* Curious — Pink */}
-                <button
-                  type="button"
-                  onClick={() => handleMoodSelect('curious')}
-                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-pink ${
-                    selectedMood === 'curious' ? 'active scale-105' : 'hover:scale-105'
-                  }`}
-                >
-                  🔮 Curious
-                </button>
-
-                {/* Sleepy — Gray */}
-                <button
-                  type="button"
-                  onClick={() => handleMoodSelect('sleepy')}
-                  className={`px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all duration-300 neon-gray ${
-                    selectedMood === 'sleepy' ? 'active scale-105' : 'hover:scale-105'
-                  }`}
-                >
-                  🌙 Sleepy
-                </button>
-
-              </div>
-
-              {/* Selected mood display */}
-              {selectedMood && (
-                <div className="font-mono text-[9px] text-on-surface-variant/30 uppercase mt-1">
-                  Current mood: {selectedMood}
-                </div>
-              )}
+            <h3 className="mb-6 font-headline text-sm font-bold uppercase tracking-widest text-slate-400">Online Moods</h3>
+            <div className="flex flex-wrap gap-2">
+              {MOOD_TAGS.map((tag) => (
+                <span key={tag.label} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${tag.className}`}>
+                  {tag.label}
+                </span>
+              ))}
             </div>
 
             <div className="mt-8">
@@ -1065,8 +1028,8 @@ export default function Home() {
                     onClick={saveCustomName}
                     disabled={!customName.trim() || nameSaved}
                     className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${nameSaved
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                        : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                      : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed'
                       }`}
                   >
                     {nameSaved ? (
@@ -1099,8 +1062,8 @@ export default function Home() {
                       key={`${emoji}-${idx}`}
                       onClick={() => saveAvatar(emoji)}
                       className={`flex items-center justify-center h-12 w-full text-2xl rounded-xl border transition-all hover:scale-110 active:scale-95 ${selectedAvatar === emoji
-                          ? 'border-primary/60 bg-primary-container/30 shadow-[0_0_12px_rgba(0,101,144,0.2)]'
-                          : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'
+                        ? 'border-primary/60 bg-primary-container/30 shadow-[0_0_12px_rgba(0,101,144,0.2)]'
+                        : 'border-slate-100 hover:border-primary/30 hover:bg-slate-50'
                         }`}
                     >
                       {emoji}
@@ -1258,8 +1221,8 @@ export default function Home() {
                 type="button"
                 onClick={copyRoomLink}
                 className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border font-label text-xs font-bold tracking-widest uppercase transition-all ${linkCopied
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
-                    : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600'
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                  : 'border-slate-200 hover:border-primary/40 hover:bg-primary-container/10 text-slate-600'
                   }`}
               >
                 <span className="material-symbols-outlined text-sm">
